@@ -938,3 +938,43 @@ func countArrangement(n int) int {
 }
 ~~~
 
+# KMP算法
+
+~~~go
+// LC 3036
+func countMatchingSubarrays(nums []int, pattern []int) int {
+    m := len(pattern)
+    pi := make([]int,m)
+    cnt := 0
+    for i := 1; i < m; i++ {
+        v := pattern[i]
+        // 当前串匹配不上就从当前串再找最长前后缀，递归
+        // cnt是当前比较的字符的位置，如果要回退的话得看之前一个字符的pi数组中的值
+        // c
+        for cnt > 0 && v != pattern[cnt] {
+            cnt = pi[cnt-1]
+        }
+        if v == pattern[cnt] {
+            cnt++
+        }
+        pi[i] = cnt
+    }
+    cnt = 0
+    ans := 0
+    for i := 0; i < len(nums)-1; i++ {
+        s := cmp.Compare(nums[i+1],nums[i])
+        for cnt > 0 && s != pattern[cnt] {
+            cnt = pi[cnt-1]
+        }
+        if s == pattern[cnt] {
+            cnt++
+        }
+        if cnt == m {
+            ans++
+            cnt = pi[cnt-1]
+        }
+    }
+    return ans
+}
+~~~
+
