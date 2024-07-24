@@ -279,10 +279,9 @@ func (g Graph) ShortestPath(start, end int) int {
         if x == end { // 计算出从起点到终点的最短路长度
             return d
         }
-        //if d > dis[x] { // x 之前出堆过，无需更新邻居的最短路
-            //continue
-        //}
-			// 上面三行可不要
+        if d > dis[x] { // x 之前出堆过，无需更新邻居的最短路
+            continue
+        }
         for _, e := range g[x] {
             y, w := e.x, e.d
             newD := d + w
@@ -433,9 +432,10 @@ func atMostNGivenDigitSet(digits []string, n int) int {
 
  
 
-# 字典树(3093)
+# 字典树
 
 ```go
+// LC 3093
 func stringIndices(wordsContainer, wordsQuery []string) []int {
     type node struct {
         son     [26]*node
@@ -477,8 +477,70 @@ func stringIndices(wordsContainer, wordsQuery []string) []int {
 链接：https://leetcode.cn/problems/longest-common-suffix-queries/solutions/2704763/zi-dian-shu-wei-hu-zui-duan-chang-du-he-r3h3j/
 来源：力扣（LeetCode）
 著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。
-
 ```
+
+~~~go
+// LC 140
+type Trie struct {
+    children [26]*Trie
+    isEnd bool
+}
+
+
+func wordBreak(s string, wordDict []string) []string {
+    res := make([]string,0)
+    root := &Trie{}
+    for _,word := range wordDict {
+        node := root
+        for i := 0; i < len(word); i++ {
+            index := word[i] - 'a'
+            if node.children[index] == nil {
+                node.children[index] = &Trie{}
+            }
+            node = node.children[index]
+        }
+        node.isEnd = true       
+    }
+    
+    var dfs func(int,[]string,int)
+    dfs = func(start int,curr []string,l int) {
+        if l == len(s) {
+            res = append(res,wrap(curr))
+            return
+        }
+        node := root
+        for i := start; i < len(s) ; i++ {
+            index := s[i]-'a'
+            if node.children[index] != nil {
+                node = node.children[index]
+                if node.isEnd {
+                    cl := i-start+1
+                    curr = append(curr,s[start:i+1])
+                    l += cl
+                    dfs(i+1,curr,l)
+                    l -= cl
+                    curr = curr[0:len(curr)-1]
+                }
+            } else {
+                break
+            }
+        }
+    }
+    dfs(0,[]string{},0)
+    return res
+}
+
+func wrap(curr []string) string {
+    res := ""
+    for _,v := range curr {
+        res += v
+        res += " "
+    }
+    return res[0:len(res)-1]
+}
+~~~
+
+
 
 # 树上倍增 寻找LCA
 
@@ -632,6 +694,16 @@ func countPrimes(n int) (cnt int) {
 }
 
 ```
+
+## 自定义排序
+
+~~~go
+sort.Slice(a,func(i,j int) bool {
+        return a[i].dis < a[j].dis
+    })
+~~~
+
+
 
 # 树状数组
 
@@ -950,7 +1022,7 @@ func countMatchingSubarrays(nums []int, pattern []int) int {
         v := pattern[i]
         // 当前串匹配不上就从当前串再找最长前后缀，递归
         // cnt是当前比较的字符的位置，如果要回退的话得看之前一个字符的pi数组中的值
-        // c
+        // pi中记录的是cnt，即下一个要比较的地方
         for cnt > 0 && v != pattern[cnt] {
             cnt = pi[cnt-1]
         }
@@ -975,6 +1047,133 @@ func countMatchingSubarrays(nums []int, pattern []int) int {
         }
     }
     return ans
+}
+~~~
+
+
+
+
+
+# 并查集
+
+~~~go
+type UnionFind struct {
+	Fa     []int
+	Groups int // 连通分量个数
+}
+
+func NewUnionFind(n int) UnionFind {
+	fa := make([]int, n) // n+1
+	for i := range fa {
+		fa[i] = i
+	}
+	return UnionFind{fa, n}
+}
+func (u UnionFind) Find(x int) int {
+	if u.Fa[x] != x {
+		u.Fa[x] = u.Find(u.Fa[x])
+	}
+	return u.Fa[x]
+}
+// newRoot = -1 表示未发生合并
+func (u *UnionFind) Merge(from, to int) (newRoot int) {
+	x, y := u.Find(from), u.Find(to)
+	if x == y {
+		return -1
+	}
+	u.Fa[x] = y
+	u.Groups--
+	return y
+}
+
+func (u UnionFind) Same(x, y int) bool {
+	return u.Find(x) == u.Find(y)
+}
+~~~
+
+~~~go
+// LC 947
+type unionFind struct {
+	parent map[int]int
+	cnt    int
+}
+
+func NewUnionFind() *unionFind {
+	return &unionFind{
+		parent: make(map[int]int),
+	}
+}
+
+func (u *unionFind) getCount() int {
+	return u.cnt
+}
+
+func (u *unionFind) find(x int) int {
+	if _, ok := u.parent[x]; !ok {
+		u.parent[x] = x
+		// 并查集集中新加入一个结点，结点的父亲结点是它自己，所以连通分量的总数 +1
+		u.cnt++
+	}
+
+	if x != u.parent[x] {
+		u.parent[x] = u.find(u.parent[x])
+	}
+	return u.parent[x]
+}
+
+func (u *unionFind) union(x, y int) {
+	rootX, rootY := u.find(x), u.find(y)
+	if rootX == rootY {
+		return
+	}
+	u.parent[rootX] = rootY
+	// 两个连通分量合并成为一个，连通分量的总数 -1
+	u.cnt--
+}
+
+func removeStones(stones [][]int) int {
+	unionf := NewUnionFind()
+	for _, s := range stones {
+		unionf.union(s[0]+114514, s[1])//增加114514偏移量，确保石头的坐标在并查集中作为节点的标识符时不会重复
+	}
+	return len(stones) - unionf.getCount()//石头的总数减去连通分量的数量，即最少需要移除的石头数
+}
+~~~
+
+
+
+
+
+# 三路快排
+
+~~~go
+func findKthLargest(nums []int, k int) int {
+    return quickselect(nums, k)
+}
+
+func quickselect(arr []int, k int) int{
+    
+    pivot := arr[len(arr)/2]
+    left := []int{}
+    right := []int{}
+    middle := []int{}
+    
+    for _, num := range arr {
+        if num > pivot {
+            left = append(left, num)
+        } else if num < pivot {
+            right = append(right, num)
+        } else {
+            middle = append(middle, num)
+        }
+    }
+    if k <= len(left) {
+        return quickselect(left,k)
+    }
+    if len(left)+len(middle) < k {
+        return quickselect(right,k-len(left)-len(middle))
+    }
+    return pivot
 }
 ~~~
 
