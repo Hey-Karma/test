@@ -705,7 +705,16 @@ sort.Slice(a,func(i,j int) bool {
 
 
 
-# 树状数组
+# 树状数组、线段树
+
+此处可以再总结一下（加粗字体为最佳方案）：
+
+数组不变，区间查询：**前缀和**、树状数组、线段树；
+数组单点修改，区间查询：**树状数组**、线段树；
+数组区间修改，单点查询：**差分**、线段树；
+数组区间修改，区间查询：**线段树**。
+
+## LC 307
 
  ```go
  // LC307
@@ -810,6 +819,7 @@ func resultArray(nums []int) []int {
     b := []int{nums[1]}
     t1 := make(fenwick,m+1)
     t2 := make(fenwick,m+1)
+    // 注意要加一这样可以避开0，因为lowerbit里面是不会有0d
     t1.add(sort.SearchInts(sorted,nums[0])+1)
     t2.add(sort.SearchInts(sorted,nums[1])+1)
     for _,x := range nums[2:] {
@@ -826,6 +836,210 @@ func resultArray(nums []int) []int {
     }
     return append(a,b...)
 
+}
+~~~
+
+## 线段树
+
+单点修改，区间查询最大值
+
+~~~go
+// LC 2407
+type seg []struct{ l, r, max int }
+
+func (t seg) build(o, l, r int) {
+	t[o].l, t[o].r = l, r
+	if l == r {
+		return
+	}
+	m := (l + r) >> 1
+	t.build(o<<1, l, m)
+	t.build(o<<1|1, m+1, r)
+}
+// o代表节点，i代表数值，val代表最长符合条件的递增数组长度
+func (t seg) modify(o, i, val int) {
+	if t[o].l == t[o].r {
+		t[o].max = val
+		return
+	}
+	m := (t[o].l + t[o].r) >> 1
+	if i <= m {
+		t.modify(o<<1, i, val)
+	} else {
+		t.modify(o<<1|1, i, val)
+	}
+	t[o].max = max(t[o<<1].max, t[o<<1|1].max)
+}
+
+// 返回区间 [l,r] 内的最大值
+func (t seg) query(o, l, r int) int {
+	if l <= t[o].l && t[o].r <= r {
+		return t[o].max
+	}
+	m := (t[o].l + t[o].r) >> 1
+	if r <= m {
+		return t.query(o<<1, l, r)
+	}
+	if m < l {
+		return t.query(o<<1|1, l, r)
+	}
+	return max(t.query(o<<1, l, r), t.query(o<<1|1, l, r))
+}
+
+func lengthOfLIS(nums []int, k int) int {
+	mx := 0
+	for _, x := range nums {
+		mx = max(mx, x)
+	}
+    // 保守起见开4n，其实可以更小
+	t := make(seg, mx*4)
+    // 用值域来建线段树，这样可以更好地方便查询符合条件的前一个状态
+	t.build(1, 1, mx)
+	for _, x := range nums {
+		if x == 1 {
+			t.modify(1, 1, 1)
+		} else {
+			t.modify(1, x, 1+t.query(1, max(x-k, 1), x-1))
+		}
+	}
+	return t[1].max
+}
+
+func max(a, b int) int {
+	if b > a {
+		return b
+	}
+	return a
+}
+~~~
+
+利用区间最大值来二分查找大于当签数的第一个数
+
+~~~go
+// LC 2940
+type seg []int
+
+func (t seg) build(a []int,o,l,r int) {
+    if l == r {
+        t[o] = a[l]
+        return
+    }
+    m := (l+r)>>1
+    t.build(a,o<<1,l,m)
+    t.build(a,o<<1|1,m+1,r)
+    t[o] = max(t[o<<1],t[o<<1|1])
+}
+
+func (t seg) query(o,l,r,L,v int) int {
+    if t[o] <= v {
+        return -1
+    }
+    if l == r {
+        return l
+    }
+    m := (l+r) >> 1
+    if L <= m {
+        pos := t.query(o<<1,l,m,L,v)
+        if pos >= 0 {
+            return pos
+        }
+    }
+    return t.query(o<<1|1,m+1,r,L,v)
+}
+
+func leftmostBuildingQueries(heights []int, queries [][]int) []int {
+    n := len(heights)
+    t := make(seg,2<<bits.Len(uint(n)))
+    t.build(heights,1,0,n-1)
+    ans := make([]int,len(queries))
+    for i,q := range queries {
+        a,b := q[0],q[1]
+        if a > b {
+            a,b = b,a
+        }
+        if a == b || heights[a] < heights[b] {
+            ans[i] = b
+        } else {
+            ans[i] = t.query(1,0,n-1,b+1,heights[a])
+        }
+    }
+    return ans
+}
+~~~
+
+## 带懒标记的线段树（区间更新）
+
+~~~go
+// LC 2569
+type seg []struct {
+    l,r,cnt1 int
+    flip bool
+}
+
+func (t seg) maintain(o int) {
+    t[o].cnt1 = t[o<<1].cnt1+t[o<<1|1].cnt1
+}
+
+func (t seg) build(a []int,o,l,r int) {
+    t[o].l,t[o].r = l,r
+    if l == r {
+        t[o].cnt1 = a[l-1]
+        return
+    }
+    m := (l+r) >> 1
+    t.build(a,o<<1,l,m)
+    t.build(a,o<<1|1,m+1,r)
+    t.maintain(o)
+}
+
+func (t seg) do(i int) {
+    o := &t[i]
+    o.cnt1 = o.r-o.l+1-o.cnt1
+    o.flip = !o.flip
+}
+
+func (t seg) spread(o int) {
+    if t[o].flip {
+        t.do(o<<1)
+        t.do(o<<1|1)
+        t[o].flip = false
+    }
+}
+
+func (t seg) update(o,l,r int) {
+    if l <= t[o].l && t[o].r <= r {
+        t.do(o)
+        return
+    }
+    t.spread(o)
+    m := (t[o].l+t[o].r)>>1
+    if l <= m {
+        t.update(o<<1,l,r)
+    }
+    if m < r {
+        t.update(o<<1|1,l,r)
+    }
+    t.maintain(o)
+}
+
+func handleQuery(nums1 []int, nums2 []int, queries [][]int) (ans []int64) {
+    sum := 0
+    for _,x := range nums2 {
+        sum += x
+    }
+    n := len(nums1)
+    t := make(seg,2<<bits.Len(uint(n)))
+    t.build(nums1,1,1,n)
+    for _,q := range queries {
+        if q[0] == 1 {
+            t.update(1,q[1]+1,q[2]+1)
+        } else if q[0] == 2 {
+            sum += q[1]*t[1].cnt1
+        } else {
+            ans = append(ans,int64(sum))
+        }
+    }
+    return 
 }
 ~~~
 
@@ -1142,6 +1356,37 @@ func removeStones(stones [][]int) int {
 
 
 
+~~~go
+type unionFind struct {
+	parent map[int]int
+}
+
+func NewUnionFind() *unionFind {
+	return &unionFind{
+		parent: make(map[int]int),
+	}
+}
+
+func (u *unionFind) find(x int) int {
+	if _, ok := u.parent[x]; !ok {
+		u.parent[x] = x
+	}
+
+	if x != u.parent[x] {
+		u.parent[x] = u.find(u.parent[x])
+	}
+	return u.parent[x]
+}
+
+func (u *unionFind) union(x, y int) {
+	rootX, rootY := u.find(x), u.find(y)
+	if rootX == rootY {
+		return
+	}
+	u.parent[rootX] = rootY
+}
+~~~
+
 
 
 # 三路快排
@@ -1175,5 +1420,51 @@ func quickselect(arr []int, k int) int{
     }
     return pivot
 }
+~~~
+
+
+
+# 离线堆
+
+~~~go
+// LC 2940
+func leftmostBuildingQueries(heights []int, queries [][]int) []int {
+    ans := make([]int, len(queries))
+    for i := range ans {
+        ans[i] = -1
+    }
+    qs := make([][]pair, len(heights))
+    for i, q := range queries {
+        a, b := q[0], q[1]
+        if a > b {
+            a, b = b, a // 保证 a <= b
+        }
+        if a == b || heights[a] < heights[b] {
+            ans[i] = b // a 直接跳到 b
+        } else {
+            qs[b] = append(qs[b], pair{heights[a], i}) // 离线询问
+        }
+    }
+
+    h := hp{}
+    for i, x := range heights {
+        for h.Len() > 0 && h[0].h < x {
+            // 堆顶的 heights[a] 可以跳到 heights[i]
+            ans[heap.Pop(&h).(pair).i] = i
+        }
+        for _, p := range qs[i] {
+            heap.Push(&h, p) // 后面再回答
+        }
+    }
+    return ans
+}
+
+type pair struct{ h, i int }
+type hp []pair
+func (h hp) Len() int           { return len(h) }
+func (h hp) Less(i, j int) bool { return h[i].h < h[j].h }
+func (h hp) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+func (h *hp) Push(v any)        { *h = append(*h, v.(pair)) }
+func (h *hp) Pop() any          { a := *h; v := a[len(a)-1]; *h = a[:len(a)-1]; return v }
 ~~~
 
